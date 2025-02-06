@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Simple Space Game</title>
+    <style>
+        canvas {
+            border: 1px solid black;
+            background: black;
+        }
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background: #1a1a1a;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const ship = {
+            x: canvas.width / 2,
+            y: canvas.height / 2,
+            radius: 20,
+            angle: 0,
+            rotation: 0,
+            thrust: false,
+            velocity: { x: 0, y: 0 },
+            speed: 0.7
+        };
+
+        const projectiles = [];
+        const enemies = [];
+        let score = 0;
+        let gameOver = false;
+
+        document.addEventListener('keydown', keyDown);
+        document.addEventListener('keyup', keyUp);
+
+        function keyDown(e) {
+            if (gameOver && e.key === ' ') {
+                restartGame();
+                return;
+            }
+
+            switch (e.key) {
+                case 'ArrowLeft': ship.rotation = -0.1; break;
+                case 'ArrowRight': ship.rotation = 0.1; break;
+                case 'ArrowUp': ship.thrust = true; break;
+                case ' ': shoot(); break;
+            }
+        }
+
+        function keyUp(e) {
+            switch (e.key) {
+                case 'ArrowLeft':
+                case 'ArrowRight': ship.rotation = 0; break;
+                case 'ArrowUp': ship.thrust = false; break;
+            }
+        }
+
+        function shoot() {
+            projectiles.push({
+                x: ship.x + Math.cos(ship.angle) * ship.radius,
+                y: ship.y + Math.sin(ship.angle) * ship.radius,
+                velocity: {
+                    x: Math.cos(ship.angle) * 10,
+                    y: Math.sin(ship.angle) * 10
+                },
+                radius: 2
+            });
+        }
+
+        function spawnEnemy() {
+            const side = Math.floor(Math.random() * 4);
+            let x, y;
+            
+            if (side === 0) { x = Math.random() * canvas.width; y = 0; }
+            else if (side === 1) { x = canvas.width; y = Math.random() * canvas.height; }
+            else if (side === 2) { x = Math.random() * canvas.width; y = canvas.height; }
+            else { x = 0; y = Math.random() * canvas.height; }
+
+            enemies.push({
+                x,
+                y,
+                radius: 15,
+                velocity: {
+                    x: (ship.x - x) * 0.005,
+                    y: (ship.y - y) * 0.005
+                }
+            });
+        }
+
+        function checkCollision(obj1, obj2) {
+            const dx = obj1.x - obj2.x;
+            const dy = obj1.y - obj2.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            return distance < obj1.radius + obj2.radius;
+        }
+
+        function restartGame() {
+            ship.x = canvas.width / 2;
+            ship.y = canvas.height / 2;
+            ship.angle = 0;
+            ship.velocity = { x: 0, y: 0 };
+            projectiles.length = 0;
+            enemies.length = 0;
+            score = 0;
+            gameOver = false;
+            update();
+        }
+
+        function update() {
+            if (gameOver) return;
+
+            ship.angle += ship.rotation;
+            if (ship.thrust) {
+                ship.velocity.x += Math.cos(ship.angle) * ship.speed;
+                ship.velocity.y += Math.sin(ship.angle) * ship.speed;
+            }
+
+            ship.x += ship.velocity.x;
+            ship.y += ship.velocity.y;
+
+            if (ship.x < 0) ship.x = canvas.width;
+            if (ship.x > canvas.width) ship.x = 0;
+            if (ship.y < 0) ship.y = canvas.height;
+            if (ship.y > canvas.height) ship.y = 0;
+
+            for (let i = projectiles.length - 1; i >= 0; i--) {
+                projectiles[i].x += projectiles[i].velocity.x;
+                projectiles[i].y += projectiles[i].velocity.y;
+
+                if (projectiles[i].x < 0 || projectiles[i].x > canvas.width ||
+                    projectiles[i].y < 0 || projectiles[i].y > canvas.height) {
+                    projectiles.splice(i, 1);
+                }
+            }
+
+            if (Math.random() < 0.02) spawnEnemy();
+
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                enemies[i].x += enemies[i].velocity.x;
+                enemies[i].y += enemies[i].velocity.y;
+
+                for (let j = projectiles.length - 1; j >= 0; j--) {
+                    if (checkCollision(enemies[i], projectiles[j])) {
+                        enemies.splice(i, 1);
+                        projectiles.splice(j, 1);
+                        score += 10;
+                        break;
+                    }
+                }
+
+                if (checkCollision(ship, enemies[i])) {
+                    gameOver = true;
+                }
+            }
+
+            draw();
+            requestAnimationFrame(update);
+        }
+
+        function draw() {
+            ctx.fillStyle = 'black';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.save();
+            ctx.translate(ship.x, ship.y);
+            ctx.rotate(ship.angle);
+            ctx.strokeStyle = 'white';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(ship.radius, 0);
+            ctx.lineTo(-ship.radius, -ship.radius / 2);
+            ctx.lineTo(-ship.radius, ship.radius / 2);
+            ctx.closePath();
+            ctx.stroke();
+            ctx.restore();
+
+            ctx.fillStyle = 'yellow';
+            projectiles.forEach(projectile => {
+                ctx.beginPath();
+                ctx.arc(projectile.x, projectile.y, projectile.radius, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            ctx.fillStyle = 'red';
+            enemies.forEach(enemy => {
+                ctx.beginPath();
+                ctx.arc(enemy.x, enemy.y, enemy.radius, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            ctx.fillStyle = 'white';
+            ctx.font = '20px Arial';
+            ctx.fillText(`Score: ${score}`, 10, 30);
+
+            if (gameOver) {
+                ctx.fillStyle = 'white';
+                ctx.font = '40px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('GAME OVER', canvas.width / 2, canvas.height / 2);
+
+                ctx.font = '20px Arial';
+                ctx.fillText('Press Space to Restart', canvas.width / 2, canvas.height / 2 + 40);
+            }
+        }
+
+        update();
+    </script>
+</body>
+</html>
